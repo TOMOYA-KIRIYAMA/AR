@@ -195,7 +195,7 @@ static void mainLoop(void)
 	    }
 		if( k == -1 ) { /* not find marker */
 			object[i].visible = 0;
-			//isFirst[i] = 1;
+			isFirst[i] = 1;
 		}
 		else{
 			/* get the transformation between the marker and the real camera */
@@ -205,7 +205,7 @@ static void mainLoop(void)
 				arGetTransMatCont(&marker_info[k], object[i].patt_trans, object[i].patt_center, object[i].patt_width, object[i].patt_trans);
 			}
 			object[i].visible = 1;
-			//isFirst[i] = 0;
+			isFirst[i] = 0;
 			
 			/* í«â¡ */
 			if(i == PTT2_MARK_ID){
@@ -247,7 +247,6 @@ static void init( void )
 			printf("ÉpÉ^Å[Éìì«Ç›çûÇ›Ç…é∏îsÇµÇ‹ÇµÇΩ!! %s\n", object[i].patt_name);
 			exit(0);
 		}
-		isFirst[i] = 1;
 	}
 
     /* open the graphics window */
