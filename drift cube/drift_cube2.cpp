@@ -44,6 +44,7 @@ char			*vconf = "";
 #endif
 
 #define PI 3.141592
+#define GRAVITY -9.8
 
 #define PTT_NUM				2
 
@@ -55,7 +56,8 @@ char			*vconf = "";
 #define PTT2_PATT_NAME		"Data/patt.kanji"
 #define PTT2_SIZE			80.0
 
-#define CUBE_SIZE 15.0
+#define CUBE_SIZE 15.0 // 1辺は CUBE_SIZE*2
+#define FPS 12  // プログラム実行に記録したfps
 
 int             xsize, ysize;
 int             thresh = 100;
@@ -320,6 +322,20 @@ void test2(void){
 }
 
 
+/* メートルをセンチメートルに変換 */
+double m2cm(double m)
+{
+	return m* 100.0;
+}
+
+
+/* センチメートルをメートルに変換 */
+double cm2m(double cm)
+{
+	return cm/100.0;
+}
+
+
 /* 呼び出されるたびに回転するcosの値 */
 double renew_cos(void)
 {
@@ -332,6 +348,7 @@ double renew_cos(void)
 }
 
 
+/* 漂い方の設定 */
 void aniDrift(void)
 {
     double base = 60.0;
@@ -344,7 +361,40 @@ void aniDrift(void)
 }
 
 
+/* バウンドに関する設定 */
 void aniBound(int flag_reset)
+{
+	double g = GRAVITY;
+	static double v0 = 0.0;
+	double v;
+	double coefficient = 0.9;
+	static int flag_stop = 0;
+
+	if (flag_reset){
+		v0 = 0.0;
+		flag_stop = 0;
+	}
+
+	if (flag_stop){
+		c_trans[2] = CUBE_SIZE;
+		return;
+		/* 飛び跳ね方が弱くなったら止める */
+	}
+
+	v = v0 + g /FPS; // 単位 m/s
+	c_trans[2] += m2cm(v/FPS);
+	if (c_trans[2] <= CUBE_SIZE){
+		c_trans[2] = CUBE_SIZE;
+		v = -v* coefficient;
+		if (v < 1.0)
+			flag_stop = 1;
+	}
+	v0 = v;
+}
+
+
+/* sinを用いた、疑似的なバウンド */
+void aniBound_attic(int flag_reset)
 {
 	static double range = c_trans[2];
 	static double theta = 90.0;
@@ -357,8 +407,9 @@ void aniBound(int flag_reset)
 		theta = 90.0;
 	}
 	
-	if (range < CUBE_SIZE + 20.0){ // とび幅が小さくなったら
-		c_trans[2] = 0.0;  // はねなくする
+	if (range < CUBE_SIZE + 5.0){ // とび幅が小さくなったら
+		c_trans[2] = CUBE_SIZE;  // はねなくする
+		return;
 	}
 
 	theta += omega;
@@ -394,7 +445,6 @@ void renew_attic(void)
 
 /* 描画内容 */
 static void draw(void) {
-	int i,j,k;
 	float size = CUBE_SIZE;
 	float normals[6][3] = {
 		{ 0.0,  0.0, -1.0},
@@ -415,8 +465,8 @@ static void draw(void) {
 		{  size,  size,  size },
 		{ -size,  size,  size }
 	};
-	static int flag_anime = 1;
-	static int flag_reset = 0;
+	static int flag_anime = 1; // どの種類のアニメーションを表示するか
+	static int flag_reset = 0; // アニメーションの方法が変更されたことを示す
 
 	/* 3Dオブジェクトを描画するための準備 */
 	argDrawMode3D();
@@ -521,7 +571,6 @@ static void draw(void) {
 
 
 static void draw_attic(void) {
-	int i,j,k;
 	float size = CUBE_SIZE;
 	float normals[6][3] = {
 		{ 0.0,  0.0, -1.0},
