@@ -43,6 +43,8 @@ char			*vconf = "Data\\WDM_camera_flipV.xml";
 char			*vconf = "";
 #endif
 
+#define PI 3.141592
+
 #define PTT_NUM				2
 
 #define PTT1_MARK_ID		0					// パターン .hiro
@@ -297,7 +299,6 @@ void test(void){
 
 void test2(void){
 	static float color[3] = {0.0, 0.0, 0.0}; // for debug
-	float tmp_c;					     // for debug
 	int vis[PTT_NUM];
 	int dis[PTT_NUM];
 
@@ -322,8 +323,7 @@ void test2(void){
 /* 呼び出されるたびに回転するcosの値 */
 double renew_cos(void)
 {
-#define PI 3.141592
-	static double theta = 0.0;
+	static double theta = -90.0;
 	double omega = 5.0;
 	double rad = theta * PI / 180.0;
 
@@ -332,8 +332,55 @@ double renew_cos(void)
 }
 
 
+void aniDrift(void)
+{
+    double base = 60.0;
+	double range = 40.0; // cos波形の振れ幅
+	c_angle[0] += 5.0; // x_angle
+	//c_angle[1] += 5.0; // y_angle
+	c_angle[2] += 5.0; // z_angle
+	
+	c_trans[2] = range* renew_cos() + base;
+}
+
+
+void aniBound(int flag_reset)
+{
+	static double range = c_trans[2];
+	static double theta = 90.0;
+	double omega = 10.0;
+	double rad = theta * PI / 180.0;
+	double coefficient = 0.5;
+
+	if (flag_reset){
+		range = c_trans[2];
+		theta = 90.0;
+	}
+	
+	if (range < CUBE_SIZE + 20.0){ // とび幅が小さくなったら
+		c_trans[2] = 0.0;  // はねなくする
+	}
+
+	theta += omega;
+	if (180.0 < theta){
+		theta = 0.0;
+		range *= coefficient;
+	}
+	c_trans[2] = range* sin(rad) + CUBE_SIZE;
+}
+
+
 /* フレームごとに更新する内容 */
-void renew(void)
+void renew(int flag_anime, int flag_reset)
+{
+	if(flag_anime)
+		aniDrift();
+	else
+		aniBound(flag_reset);
+}
+
+
+void renew_attic(void)
 {
 #define Z_TRANS_BASE 60.0
 	double range = 40.0; // cos波形の振れ幅
@@ -345,7 +392,135 @@ void renew(void)
 }
 
 
+/* 描画内容 */
 static void draw(void) {
+	int i,j,k;
+	float size = CUBE_SIZE;
+	float normals[6][3] = {
+		{ 0.0,  0.0, -1.0},
+		{ 1.0,  0.0,  0.0},
+		{ 0.0,  0.0,  1.0},
+		{-1.0,  0.0,  0.0},
+		{ 0.0,  1.0,  0.0},
+		{ 0.0, -1.0,  0.0}
+	};
+		
+	float cube_points[8][3] ={
+		{ -size, -size, -size },
+		{  size, -size, -size },
+		{  size, -size,  size },
+		{ -size, -size,  size },
+		{ -size,  size, -size },
+		{  size,  size, -size },
+		{  size,  size,  size },
+		{ -size,  size,  size }
+	};
+	static int flag_anime = 1;
+	static int flag_reset = 0;
+
+	/* 3Dオブジェクトを描画するための準備 */
+	argDrawMode3D();
+	argDraw3dCamera(0, 0);
+
+
+	glClear(GL_DEPTH_BUFFER_BIT); //バッファの消去
+	glEnable( GL_DEPTH_TEST );		// 陰面処理の適用
+
+	mySetLight();
+	glEnable( GL_LIGHTING );
+
+	myMatrix(object[PTT1_MARK_ID].patt_trans);
+	
+	if( isAppearPatt(PTT1_MARK_ID)){
+		flag_anime = 1;
+		flag_reset = 1;
+	}
+	else if(isDisappearPatt(PTT1_MARK_ID)){
+		flag_anime = 0;
+		flag_reset = 1;
+	}
+	renew(flag_anime, flag_reset); // フレーム毎の更新内容
+	flag_reset = 0;
+
+	// 立方体
+	glPushMatrix();
+		glTranslated( c_trans[0], c_trans[1], c_trans[2]);//平行移動値の設定
+		glRotatef(c_angle[0], 1.0, 0.0, 0.0 );
+		glRotatef(c_angle[1], 0.0, 1.0, 0.0 );
+		glRotatef(c_angle[2], 0.0, 0.0, 1.0 );
+		
+		/* 前 */
+		glEnable( GL_TEXTURE_2D );
+		glBegin( GL_QUADS );
+			mySetMaterial( 1.0, 1.0, 1.0 );
+			glBindTexture(GL_TEXTURE_2D, texture);
+			glNormal3fv(normals[0]);
+			glTexCoord2f(0.0, 1.0); glVertex3fv(cube_points[0]);
+			glTexCoord2f(1.0, 1.0); glVertex3fv(cube_points[1]);
+			glTexCoord2f(1.0, 0.0); glVertex3fv(cube_points[5]);
+			glTexCoord2f(0.0, 0.0); glVertex3fv(cube_points[4]);
+		glEnd();
+		glDisable( GL_TEXTURE_2D );
+		
+		/* 右 */
+		glBegin( GL_QUADS );
+			mySetMaterial( 0.0, 1.0, 0.0);
+			glNormal3fv(normals[1]);
+			glVertex3fv(cube_points[1]);
+			glVertex3fv(cube_points[2]);
+			glVertex3fv(cube_points[6]);
+			glVertex3fv(cube_points[5]);
+		glEnd();
+
+		/* 後ろ */
+		glBegin( GL_QUADS );
+			mySetMaterial( 0.0, 1.0, 1.0);
+			glNormal3fv(normals[2]);
+			glVertex3fv(cube_points[2]);
+			glVertex3fv(cube_points[3]);
+			glVertex3fv(cube_points[7]);
+			glVertex3fv(cube_points[6]);
+		glEnd();
+
+		/* 左 */
+		glBegin( GL_QUADS );
+			mySetMaterial( 1.0, 0.0, 1.0);
+			glNormal3fv(normals[3]);
+			glVertex3fv(cube_points[3]);
+			glVertex3fv(cube_points[0]);
+			glVertex3fv(cube_points[4]);
+			glVertex3fv(cube_points[7]);
+		glEnd();
+
+		/* 上 */
+		glBegin( GL_QUADS );
+			mySetMaterial( 0.0, 0.0, 1.0);
+			glNormal3fv(normals[4]);
+			glVertex3fv(cube_points[4]);
+			glVertex3fv(cube_points[5]);
+			glVertex3fv(cube_points[6]);
+			glVertex3fv(cube_points[7]);
+		glEnd();
+
+		/* 下 */
+		glBegin( GL_QUADS );
+			mySetMaterial( 1.0, 1.0, 0.0);
+			glNormal3fv(normals[5]);
+			glVertex3fv(cube_points[0]);
+			glVertex3fv(cube_points[1]);
+			glVertex3fv(cube_points[2]);
+			glVertex3fv(cube_points[3]);
+		glEnd();
+
+	glPopMatrix();
+
+
+	glDisable( GL_LIGHTING );
+	glDisable( GL_DEPTH_TEST );		// 陰面処理の適用
+}
+
+
+static void draw_attic(void) {
 	int i,j,k;
 	float size = CUBE_SIZE;
 	float normals[6][3] = {
@@ -381,7 +556,7 @@ static void draw(void) {
 
 	myMatrix(object[PTT1_MARK_ID].patt_trans);
 	
-	renew(); // フレーム毎の更新内容
+	renew_attic(); // フレーム毎の更新内容
 
 	// 立方体
 	glPushMatrix();
